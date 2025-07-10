@@ -3,46 +3,49 @@ import streamlit as st
 from crewai import Agent, Task, Crew
 from langchain_openai import ChatOpenAI
 
-# Load OpenAI API key from environment
+# ── Load OpenAI key from environment ────────────────────────────────────────
 openai_key = os.getenv("OPENAI_API_KEY")
+if not openai_key:
+    st.error("❌ OPENAI_API_KEY environment variable not found. "
+             "Please set it in your shell or in Streamlit Cloud secrets.")
+    st.stop()
 
-# LLM Configuration
 llm = ChatOpenAI(
     openai_api_key=openai_key,
     model_name="gpt-3.5-turbo",
     temperature=0.5
 )
 
-# Streamlit UI
+# ── Streamlit UI ────────────────────────────────────────────────────────────
 st.set_page_config(page_title="Multi-Agent Article Writer", layout="centered")
 st.title("🧠 Multi-Agent Article Writer")
-topic = st.text_input("Enter a topic to generate an article:")
 
-if topic:
-    with st.spinner("🤖 Agents working together..."):
+topic = st.text_input("Enter a topic to generate an article:")
+generate = st.button("🚀 Generate Article")
+
+if generate and topic.strip():
+    with st.spinner("Agents are collaborating..."):
         # Agents
         researcher = Agent(
-            role="AI Research Analyst",
-            goal=f"Research about '{topic}' in detail",
-            backstory="An expert researcher with deep AI knowledge",
+            role="Research Analyst",
+            goal=f"Gather key insights about '{topic}'",
+            backstory="Expert at digging up the latest tools, facts, and trends.",
             verbose=True,
             allow_delegation=False,
             llm=llm,
         )
-
         writer = Agent(
-            role="Technical Content Writer",
-            goal="Write a full article on the topic",
-            backstory="A professional writer who converts research into clear, engaging content",
+            role="Technical Writer",
+            goal="Create a well-structured article from the research",
+            backstory="Turns complex research into engaging prose.",
             verbose=True,
             allow_delegation=False,
             llm=llm,
         )
-
         editor = Agent(
-            role="Language Editor",
-            goal="Edit the article to ensure perfect grammar, tone, and clarity",
-            backstory="An English expert who finalizes articles before publication",
+            role="Editor",
+            goal="Polish the article for grammar, tone, and clarity",
+            backstory="Ensures every sentence is crisp and error-free.",
             verbose=True,
             allow_delegation=False,
             llm=llm,
@@ -50,34 +53,38 @@ if topic:
 
         # Tasks
         research_task = Task(
-            description=f"Find at least five insights on: {topic}. Include key facts, tools, and relevance.",
+            description=f"Produce at least 5 bullet-point insights on {topic}.",
+            expected_output="Bullet list with explanations.",
             agent=researcher,
-            expected_output="A structured list of key points about the topic."
         )
-
         write_task = Task(
-            description="Write a complete blog article based on the research findings.",
+            description="Draft an article with intro, body, and conclusion using the research.",
+            expected_output="600–800-word Markdown article.",
             agent=writer,
             depends_on=[research_task],
-            expected_output="A full article with intro, body (covering each insight), and conclusion."
         )
-
         edit_task = Task(
-            description="Edit the article for tone, grammar, and clarity.",
+            description="Refine the article for publication quality.",
+            expected_output="Polished final article.",
             agent=editor,
             depends_on=[write_task],
-            expected_output="A final polished article ready for publishing."
         )
 
-        # Crew
+        # Crew execution
         crew = Crew(
             agents=[researcher, writer, editor],
             tasks=[research_task, write_task, edit_task],
-            verbose=True
+            verbose=False,
         )
 
         result = crew.kickoff()
-        st.success("✅ Final article generated!")
-        st.markdown("---")
-        st.markdown(result.output if hasattr(result, "output") else result)
+        article = str(result).strip()
 
+        if article:
+            st.success("✅ Article ready!")
+            st.markdown("---")
+            st.markdown(article)
+        else:
+            st.warning("⚠️ Agents returned an empty result. Try another topic.")
+elif generate:
+    st.error("Please enter a topic before clicking Generate.")
