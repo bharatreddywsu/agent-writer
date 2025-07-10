@@ -1,5 +1,4 @@
 streamlit==1.35.0
-crewai==0.23.18
-chromadb==0.4.24          # stable in Streamlit Cloud
+crewai==0.23.8          # version that works without Chromadb
 langchain==0.2.1
 langchain-openai==0.1.8
