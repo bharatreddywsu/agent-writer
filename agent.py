@@ -1,88 +1,53 @@
 import os
+import sys
+import importlib
 
-# ── Disable Chromadb-based embedding configurator so CrewAI works without chromadb ──
-os.environ["CREWAI_DISABLE_EMBEDDING_CONFIGURATOR"] = "1"
+# ── Patch to fix sqlite3 version issue ──
+importlib.import_module("pysqlite3")
+sys.modules["sqlite3"] = sys.modules.pop("pysqlite3")
 
-import streamlit as st
-from crewai import Agent, Task, Crew
-from langchain_openai import ChatOpenAI
+# ── Langchain and HuggingFace Imports ──
+from langchain_community.document_loaders import DirectoryLoader
+from langchain_community.vectorstores import FAISS
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain_huggingface import HuggingFaceEndpoint
+from langchain.chains import RetrievalQA
 
-# ── Load OpenAI key from environment ────────────────────────────────────────────────
-openai_key = os.getenv("OPENAI_API_KEY")
-if not openai_key:
-    st.error(
-        "❌ OPENAI_API_KEY environment variable not found.\n"
-        "Set it in ~/.zshrc for local runs or in Streamlit Cloud Secrets when deployed."
-    )
-    st.stop()
+# ── Load Hugging Face API key from env ──
+os.environ["HUGGINGFACEHUB_API_TOKEN"] = os.getenv("HUGGINGFACEHUB_API_TOKEN")
 
-llm = ChatOpenAI(openai_api_key=openai_key, model_name="gpt-3.5-turbo", temperature=0.5)
+# ── Load and Split Documents ──
+loader = DirectoryLoader('docs')
+documents = loader.load()
 
-# ── Streamlit UI ────────────────────────────────────────────────────────────────────
-st.set_page_config(page_title="Multi-Agent Article Writer", layout="centered")
-st.title("🧠 Multi-Agent Article Writer")
+text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
+splits = text_splitter.split_documents(documents)
 
-topic = st.text_input("Enter a topic to generate an article:")
-generate = st.button("🚀 Generate Article")
+# ── Embeddings and Vectorstore ──
+embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+db = FAISS.from_documents(splits, embeddings)
 
-if generate and topic.strip():
-    with st.spinner("🤖 Agents collaborating..."):
-        # ── Define Agents ──
-        researcher = Agent(
-            role="Research Analyst",
-            goal=f"Collect the most important insights about '{topic}'",
-            backstory="An expert researcher scouring the latest data, tools and trends.",
-            verbose=True,
-            llm=llm,
-        )
-        writer = Agent(
-            role="Technical Writer",
-            goal="Write a clear, engaging article from the research",
-            backstory="Transforms complex findings into readable prose.",
-            verbose=True,
-            llm=llm,
-        )
-        editor = Agent(
-            role="Language Editor",
-            goal="Polish the article for flawless grammar and flow",
-            backstory="Ensures publication-ready quality.",
-            verbose=True,
-            llm=llm,
-        )
+# ── Create Retriever and LLM ──
+retriever = db.as_retriever()
 
-        # ── Define Tasks ──
-        research_task = Task(
-            description=f"Produce at least five key bullet-point insights on: {topic}",
-            expected_output="A bullet list summarizing each key point.",
-            agent=researcher,
-        )
-        write_task = Task(
-            description="Draft a 600-800 word Markdown article using the research.",
-            expected_output="Article with intro, body (covering each insight) and conclusion.",
-            agent=writer,
-            depends_on=[research_task],
-        )
-        edit_task = Task(
-            description="Refine the article for tone, clarity and grammar.",
-            expected_output="Polished final article ready to publish.",
-            agent=editor,
-            depends_on=[write_task],
-        )
+llm = HuggingFaceEndpoint(
+    repo_id="bigscience/bloomz-560m",
+    temperature=0.5,
+)
 
-        # ── Run crew ──
-        crew = Crew(
-            agents=[researcher, writer, editor],
-            tasks=[research_task, write_task, edit_task],
-            verbose=False,
-        )
+# ── Retrieval-based QA Chain ──
+qa_chain = RetrievalQA.from_chain_type(llm=llm, retriever=retriever)
 
-        article = str(crew.kickoff()).strip()
+print("✅ AI Research Assistant is ready! Ask questions or type 'exit' to quit.\n")
 
-        if article:
-            st.success("✅ Article generated!")
-            st.markdown("---")
-            st.markdown(article)
-        else:
-            st.warning("⚠️ Agents returned an empty result. Try another topic.")
-elif generate:
-    st.error("Please enter a topic before clicking Generate.")
+# ── Interactive Loop ──
+while True:
+    query = input("Your question: ")
+    if query.lower() == 'exit':
+        break
+    try:
+        answer = qa_chain.invoke({"query": query})
+        print("\nAnswer:", answer, "\n")
+    except Exception as e:
+        print("\n⚠️ Error:", e, "\n")
