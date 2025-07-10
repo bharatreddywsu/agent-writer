@@ -1,0 +1,70 @@
+# Query: crewai_ai_tools.py
+# ContextLines: 1
+
+import os
+from crewai import Agent, Task, Crew
+from langchain.llms import OpenAI
+
+# Set your OpenAI key here
+os.environ["OPENAI_API_KEY"] = "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"  # Replace this!
+
+llm = OpenAI(temperature=0.5, model_name="gpt-3.5-turbo")
+
+# Agents
+researcher = Agent(
+    role="AI Research Analyst",
+    goal="Gather top AI tools trending in 2025",
+    backstory="Expert in AI tools, trends, and evaluations.",
+    verbose=True,
+    allow_delegation=False,
+    llm=llm,
+)
+
+writer = Agent(
+    role="Tech Writer",
+    goal="Write an article using the research",
+    backstory="Writes beginner-friendly tech content with clarity.",
+    verbose=True,
+    allow_delegation=False,
+    llm=llm,
+)
+
+editor = Agent(
+    role="Language Editor",
+    goal="Improve grammar, tone, and clarity of the article",
+    backstory="Professional editor polishing AI content.",
+    verbose=True,
+    allow_delegation=False,
+    llm=llm,
+)
+
+# Tasks
+topic = "Top AI tools in 2025"
+
+research_task = Task(
+    description=f"Find 5 trending AI tools in 2025. Include what they do and why they matter.",
+    agent=researcher,
+)
+
+write_task = Task(
+    description="Write a structured article using the research. Include intro, tool summaries, and conclusion.",
+    agent=writer,
+    depends_on=[research_task],
+)
+
+edit_task = Task(
+    description="Edit the article for tone, grammar, and structure.",
+    agent=editor,
+    depends_on=[write_task],
+)
+
+# Crew
+crew = Crew(
+    agents=[researcher, writer, editor],
+    tasks=[research_task, write_task, edit_task],
+    verbose=True
+)
+
+result = crew.kickoff()
+print("\n✅ FINAL ARTICLE:\n")
+print(result)

@@ -2,103 +2,82 @@ import os
 import streamlit as st
 from crewai import Agent, Task, Crew
 from langchain_openai import ChatOpenAI
-import traceback
-import time
 
-# ── Hardcoded OpenAI Key ──
-os.environ["OPENAI_API_KEY"] = (
-    "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"
+# Load OpenAI API key from environment
+openai_key = os.getenv("OPENAI_API_KEY")
+
+# LLM Configuration
+llm = ChatOpenAI(
+    openai_api_key=openai_key,
+    model_name="gpt-3.5-turbo",
+    temperature=0.5
 )
 
-# ── Streamlit Page Setup ──
-st.set_page_config(page_title="🧠 CrewAI Agent Writer", layout="centered")
+# Streamlit UI
+st.set_page_config(page_title="Multi-Agent Article Writer", layout="centered")
 st.title("🧠 Multi-Agent Article Writer")
-
 topic = st.text_input("Enter a topic to generate an article:")
-generate = st.button("🚀 Generate Article")
 
-if generate and topic.strip():
-    with st.spinner("Agents at work... Please wait."):
-        try:
-            print("🔥 Agents starting...")
-            start_time = time.time()
+if topic:
+    with st.spinner("🤖 Agents working together..."):
+        # Agents
+        researcher = Agent(
+            role="AI Research Analyst",
+            goal=f"Research about '{topic}' in detail",
+            backstory="An expert researcher with deep AI knowledge",
+            verbose=True,
+            allow_delegation=False,
+            llm=llm,
+        )
 
-            # ── LLM Setup ──
-            llm = ChatOpenAI(model_name="gpt-3.5-turbo", temperature=0.5)
+        writer = Agent(
+            role="Technical Content Writer",
+            goal="Write a full article on the topic",
+            backstory="A professional writer who converts research into clear, engaging content",
+            verbose=True,
+            allow_delegation=False,
+            llm=llm,
+        )
 
-            # ── Agents ──
-            researcher = Agent(
-                role="Research Analyst",
-                goal="Find key tools and insights related to the topic",
-                backstory="You're an AI tools expert always up to date with the latest innovations.",
-                verbose=True,
-                allow_delegation=False,
-                llm=llm,
-            )
+        editor = Agent(
+            role="Language Editor",
+            goal="Edit the article to ensure perfect grammar, tone, and clarity",
+            backstory="An English expert who finalizes articles before publication",
+            verbose=True,
+            allow_delegation=False,
+            llm=llm,
+        )
 
-            writer = Agent(
-                role="Content Writer",
-                goal="Write a well-structured article using the research",
-                backstory="You're skilled at writing tech blogs that are clear and engaging.",
-                verbose=True,
-                allow_delegation=False,
-                llm=llm,
-            )
+        # Tasks
+        research_task = Task(
+            description=f"Find at least five insights on: {topic}. Include key facts, tools, and relevance.",
+            agent=researcher,
+            expected_output="A structured list of key points about the topic."
+        )
 
-            editor = Agent(
-                role="Editor",
-                goal="Polish the article for grammar, tone, and flow",
-                backstory="You fine-tune articles for smooth reading and professional quality.",
-                verbose=True,
-                allow_delegation=False,
-                llm=llm,
-            )
+        write_task = Task(
+            description="Write a complete blog article based on the research findings.",
+            agent=writer,
+            depends_on=[research_task],
+            expected_output="A full article with intro, body (covering each insight), and conclusion."
+        )
 
-            # ── Tasks ──
-            research_task = Task(
-                description=f"Research at least 5 facts, tools, or trends related to: {topic}",
-                expected_output="Bullet points with 5+ items: name, short description, and importance.",
-                agent=researcher,
-            )
+        edit_task = Task(
+            description="Edit the article for tone, grammar, and clarity.",
+            agent=editor,
+            depends_on=[write_task],
+            expected_output="A final polished article ready for publishing."
+        )
 
-            write_task = Task(
-                description="Write an article with intro, sections per item, and conclusion based on the research.",
-                expected_output="A well-formatted Markdown article around 600–800 words.",
-                agent=writer,
-                depends_on=[research_task],
-            )
+        # Crew
+        crew = Crew(
+            agents=[researcher, writer, editor],
+            tasks=[research_task, write_task, edit_task],
+            verbose=True
+        )
 
-            edit_task = Task(
-                description="Edit the article for tone, grammar, and flow.",
-                expected_output="A polished final article ready to publish.",
-                agent=editor,
-                depends_on=[write_task],
-            )
+        result = crew.kickoff()
+        st.success("✅ Final article generated!")
+        st.markdown("---")
+        st.markdown(result.output if hasattr(result, "output") else result)
 
-            # ── Crew Run ──
-            crew = Crew(
-                agents=[researcher, writer, editor],
-                tasks=[research_task, write_task, edit_task],
-                verbose=False,
-            )
-
-            result = crew.kickoff()
-            final_output = str(result).strip()
-
-            print("✅ Agents finished in", round(time.time() - start_time, 2), "seconds")
-            print("📝 Raw Result:", repr(final_output))
-
-            if final_output:
-                st.success("✅ Done! Here's your article:")
-                st.markdown("---")
-                st.markdown(final_output)
-            else:
-                st.warning("⚠️ The agents completed but gave an empty result.")
-                st.info("Try rephrasing the topic, or check your OpenAI key and internet connection.")
-
-        except Exception as e:
-            st.error("❌ An error occurred during execution:")
-            st.code(traceback.format_exc())
-
-elif generate and not topic.strip():
-    st.error("❗ Please enter a topic.")

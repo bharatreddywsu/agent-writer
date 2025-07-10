@@ -1,0 +1,52 @@
+{\rtf1\ansi\ansicpg1252\cocoartf2822
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fswiss\fcharset0 Helvetica;}
+{\colortbl;\red255\green255\blue255;}
+{\*\expandedcolortbl;;}
+\margl1440\margr1440\vieww11520\viewh8400\viewkind0
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
+
+\f0\fs24 \cf0 import os\
+import streamlit as st\
+from crewai import Agent, Task, Crew\
+from langchain_openai import ChatOpenAI\
+\
+# \uc0\u9472 \u9472  Hardcoded OpenAI Key (for quick local use) \u9472 \u9472 \
+os.environ["OPENAI_API_KEY"] = (\
+    "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"\
+)\
+\
+# \uc0\u9472 \u9472  Streamlit App Config \u9472 \u9472 \
+st.set_page_config(page_title="\uc0\u55358 \u56800  CrewAI Agent Writer", layout="centered")\
+st.title("\uc0\u55358 \u56800  Multi-Agent Article Writer")\
+\
+topic = st.text_input("Enter a topic to generate an article:")\
+generate = st.button("\uc0\u55357 \u56960  Generate Article")\
+\
+if generate and topic.strip():\
+    with st.spinner("Agents at work... Please wait."):\
+        llm = ChatOpenAI(model_name="gpt-3.5-turbo", temperature=0.5)\
+\
+        # \uc0\u9472 \u9472  Define Agents \u9472 \u9472 \
+        researcher = Agent(\
+            role="Research Analyst",\
+            goal="Find key tools and insights related to the topic",\
+            backstory="You're an AI tools expert always up to date with the latest innovations.",\
+            verbose=True,\
+            allow_delegation=False,\
+            llm=llm,\
+        )\
+\
+        writer = Agent(\
+            role="Content Writer",\
+            goal="Write a well-structured article using the research",\
+            backstory="You're skilled at writing tech blogs that are clear and engaging.",\
+            verbose=True,\
+            allow_delegation=False,\
+            llm=llm,\
+        )\
+\
+        editor = Agent(\
+            role="Editor",\
+            goal="Polish the article for grammar, tone, and clarity",\
+            backst\
+}
