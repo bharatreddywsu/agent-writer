@@ -1,4 +1,18 @@
-streamlit
-crewai
-langchain
-langchain-openai
+# Core packages
+langchain>=0.2.0
+langchain-community>=0.0.30
+langchain-huggingface>=0.0.7
+
+# Embeddings & Transformers
+sentence-transformers>=2.2.2
+huggingface-hub>=0.22.2
+
+# FAISS for vector search
+faiss-cpu>=1.7.4
+
+# Streamlit for UI (optional if used)
+streamlit>=1.35.0
+
+# Other dependencies
+tqdm
+numpy
